@@ -1,0 +1,61 @@
+flowchart TD
+  %% System Architecture for Edu-Pay (BEC)
+  U[User Browser]
+
+  subgraph Frontend [React + Vite (TypeScript)]
+    F[UI Pages & Components\nAdmin & Student Flows]
+    API[API Layer\nbackendFetch + JWT]
+    Proxy[Vite Dev Proxy\n"/api" → 5000]
+  end
+
+  subgraph Backend [Flask API]
+    AuthBP[Auth Blueprint\n/login, /me]
+    StudentsBP[Students Blueprint\n/list, /:id, /create]
+    PaymentsBP[Payments Blueprint\n/list, /create-order, /verify, /:invoiceId/receipt]
+    ReportsBP[Reports Blueprint\n/summary]
+
+    subgraph Services
+      PaySvc[payments_service.py\nOrder, Verify, List]
+      ReceiptGen[receipt_generator.py\nHTML → PDF (WeasyPrint)\nFallback ReportLab]
+    end
+
+    subgraph Data[SQLAlchemy ORM]
+      DB[(SQLite DB\ninstance/edu_pay.db)]
+      StudentModel[Student]
+      InvoiceModel[Invoice]
+      PaymentModel[Payment]
+    end
+
+    CORS[CORS: allow Frontend Origin]
+    JWT[JWT: flask-jwt-extended]
+  end
+
+  Razorpay[(Razorpay API)]
+  Receipts[[Receipts Directory]]
+
+  %% Flows
+  U --> F
+  F --> API
+  API --> Proxy
+  Proxy --> AuthBP
+  Proxy --> StudentsBP
+  Proxy --> PaymentsBP
+  Proxy --> ReportsBP
+
+  PaymentsBP --> PaySvc
+  PaySvc --> Razorpay
+  PaySvc --> InvoiceModel
+  PaySvc --> PaymentModel
+
+  PaymentsBP --> ReceiptGen
+  ReceiptGen --> Receipts
+
+  StudentsBP --> StudentModel
+  ReportsBP --> PaymentModel
+  ReportsBP --> StudentModel
+
+  StudentModel --> DB
+  InvoiceModel --> DB
+  PaymentModel --> DB
+
+  Backend -.protects via JWT/CORS.- U
